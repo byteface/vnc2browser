@@ -487,7 +487,7 @@ def main():
                 remoteframebuffer,              #the application/display
                 depth,                          #color depth
                 o.opts['fast'],                 #if a fast connection is used
-                'PUT_YOUR_VNC_PASSWORD_HERE',             #password or none. (vnc passwords should be encrypted)
+                o.opts['password'],             #password or none. (vnc passwords should be encrypted)
                 int(o.opts['shared']),          #shared session flag
         )
     )

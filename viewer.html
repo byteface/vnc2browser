@@ -1,0 +1,61 @@
+<html><style type="text/css">
+    canvas {
+        background: #131c35 linear-gradient(black,#192853, black);
+        display:block; position:absolute;
+        top:0; left:0; right:0; bottom:0;
+    }
+    </style><body><canvas id="canvas" width="1000" height="600"></canvas></body><script>
+//const socket = new WebSocket('ws://0.0.0.0:5555');
+const socket = new WebSocket('ws://domain.com:5560'); // your nginx should listen on 5560 and forward to 5555
+
+socket.onmessage = function(event) { data = event.data; draw(); };  // TOOD - dont send json. just data with seperator
+</script><script>
+    var canvas = document.getElementById('canvas');
+    var context = canvas.getContext('2d');
+    var WIDTH=canvas.width;
+    var HEIGHT=canvas.height;
+    function resizeCanvas(){
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      WIDTH=canvas.width;
+      HEIGHT=canvas.height;
+    }
+    function animate() {
+        socket.send('!'); // send any old message to trigger socket response. so i can control the framerate
+        // draw();
+    }
+    function draw() {
+
+        console.log(data);
+        // context.clearRect(0, 0, WIDTH, HEIGHT);
+        // context.globalCompositeOperation = "source-over";
+        var i, r;
+        for(i = 0; i < data.length; i++ ) {
+         //   point = data[i];
+           // context.save();
+           // context.translate(point.x,point.y);
+           // context.rotate( point.rotation );
+           // context.restore();
+
+            r = data[i];
+            drawRect(r[0],r[1],r[2],r[3],r[4]);
+        }
+    }
+    function drawRect(x,y,width,height,color){
+      context.beginPath();
+      context.fillStyle = color;
+      context.fillRect(x, y, width, height);
+      //context.lineWidth = 2;
+      //context.strokeStyle = '#000';
+      //context.stroke();
+      context.fill();
+    }
+    var intID;
+    function setFramerate(val){
+      clearInterval(this.intID)
+      this.intID = setInterval( function(){ animate(); }, 1000/val );
+      // window.requestAnimationFrame(animate);
+    }
+    setFramerate(60);
+    resizeCanvas();
+</script></html>

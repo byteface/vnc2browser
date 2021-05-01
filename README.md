@@ -15,12 +15,37 @@ Usage
 2. Setup a vncserver
 3. Configure nginx to have a ws:// endpoint
 4. Run your vncserver
-5. add your password and host to vnc2browser.py and run it. (install requirements. twisted/domonic)
-
-(also edit the socket endpoint in)
-const socket = new WebSocket('ws://domain.com:5560'); // your nginx should listen on 5560 and forward to 5555
-
+5. follow Setup steps below.
 6. place viewer.html somewhere visitable. i.e. serve it. Then Visit it in the browser
+
+
+Setup
+-----
+
+```
+
+cd vnc2browser
+
+python3 -m venv venv
+. venv/bin/activate
+
+python -m pip install -r requirments.txt
+```
+
+
+start the server passing it your password
+```
+python vnc2browser.py -password XXXXX
+
+```
+
+running vnc2browser.py will generate the viewer.html. You can edit this and put it where it needs to be. Then visit that page.
+
+(edit the socket endpoint in viewer.html which appears when you run the server)
+const socket = new WebSocket('ws://domain.com:5560'); // i.e. if your nginx listens on 5560 and forward to 5555
+
+
+
 
 
 Bugs
@@ -65,7 +90,7 @@ vncpasswd  # < change password.
 remember to :
 
 
-ssh -i myapp.pem -L 5901:localhost:5901 ubuntu@myapp.com
+ssh -i myapp.pem -L 5901:localhost:5901 root@myapp.com
 
 then you can just connect to localhost:5901 or 2 or 3 etc when you vnc.
 
