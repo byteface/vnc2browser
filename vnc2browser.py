@@ -536,7 +536,7 @@ script('''
 //const socket = new WebSocket('ws://0.0.0.0:5555');
 const socket = new WebSocket('ws://domain.com:5560'); // your nginx should listen on 5560 and forward to 5555
 
-socket.onmessage = function(event) { data = event.data; draw(); };  // TOOD - dont send json. just data with seperator
+socket.onmessage = function(event) { data = JSON.parse(event.data); draw(); };  // TOOD - dont send json. just data with seperator
 '''),
 
 # draw the data
@@ -558,6 +558,7 @@ script('''
     function draw() {
 
         console.log(data);
+        data = data.flat();
         // context.clearRect(0, 0, WIDTH, HEIGHT);
         // context.globalCompositeOperation = "source-over";
         var i, r;
@@ -574,7 +575,7 @@ script('''
     }
     function drawRect(x,y,width,height,color){
       context.beginPath();
-      context.fillStyle = color;
+      context.fillStyle = color.substr(0,7);
       context.fillRect(x, y, width, height);
       //context.lineWidth = 2;
       //context.strokeStyle = '#000';
