@@ -549,10 +549,10 @@ $(canvas).ready(function() {
     $("canvas").on('mouseup', function(event){ 
         socket.send( stringify_object(event) );
     }); 
-    $("canvas").on("keydown", function(event){
+    $("body").on("keydown", function(event){
         socket.send( stringify_object(event) );
     })
-    $("canvas").on("keyup", function(event){
+    $("body").on("keyup", function(event){
         socket.send( stringify_object(event) );
     })
     $("canvas").on("mousemove", function(event){
