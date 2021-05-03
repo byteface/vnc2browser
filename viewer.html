@@ -4,11 +4,58 @@
         display:block; position:absolute;
         top:0; left:0; right:0; bottom:0;
     }
-    </style><body><canvas id="canvas" width="1000" height="600"></canvas></body><script>
+    </style><body><input placeholder="localhost:1" id="host" /><input placeholder="port" id="port" /><input placeholder="password" id="password" /><script scr="https://code.jquery.com/jquery-3.5.1.min.js"></script><canvas id="canvas" width="1280" height="800"></canvas></body><script>
 //const socket = new WebSocket('ws://0.0.0.0:5555');
 const socket = new WebSocket('ws://domain.com:5560'); // your nginx should listen on 5560 and forward to 5555
 
-socket.onmessage = function(event) { data = event.data; draw(); };  // TOOD - dont send json. just data with seperator
+socket.onmessage = function(event) { data = JSON.parse(event.data); draw(); };  // TOOD - dont send json. just data with seperator
+
+
+function stringify_object(object, depth=0, max_depth=2) {
+    // change max_depth to see more levels, for a touch event, 2 is good
+    if (depth > max_depth)
+        return 'Object';
+
+    const obj = {};
+    for (let key in object) {
+        let value = object[key];
+        if (value instanceof Node)
+            // specify which properties you want to see from the node
+            value = {id: value.id};
+        else if (value instanceof Window)
+            value = 'Window';
+        else if (value instanceof Object)
+            value = stringify_object(value, depth+1, max_depth);
+
+        if(key=="originalEvent"){ // note im stripping this one off
+          continue;
+        }
+
+        obj[key] = value;
+    }
+
+    return depth? obj: JSON.stringify(obj);
+}
+
+$(canvas).ready(function() { 
+    $("canvas").on('mousedown', function(event){ 
+        socket.send( stringify_object(event) );
+    }); 
+    $("canvas").on('mouseup', function(event){ 
+        socket.send( stringify_object(event) );
+    }); 
+    $("canvas").on("keydown", function(event){
+        socket.send( stringify_object(event) );
+    })
+    $("canvas").on("keyup", function(event){
+        socket.send( stringify_object(event) );
+    })
+    $("canvas").on("mousemove", function(event){
+        //socket.send( stringify_object(event) );
+    })
+});
+
+
 </script><script>
     var canvas = document.getElementById('canvas');
     var context = canvas.getContext('2d');
@@ -27,6 +74,7 @@ socket.onmessage = function(event) { data = event.data; draw(); };  // TOOD - do
     function draw() {
 
         console.log(data);
+        data = data.flat();
         // context.clearRect(0, 0, WIDTH, HEIGHT);
         // context.globalCompositeOperation = "source-over";
         var i, r;
@@ -43,7 +91,7 @@ socket.onmessage = function(event) { data = event.data; draw(); };  // TOOD - do
     }
     function drawRect(x,y,width,height,color){
       context.beginPath();
-      context.fillStyle = color;
+      context.fillStyle = color.substr(0,7);
       context.fillRect(x, y, width, height);
       //context.lineWidth = 2;
       //context.strokeStyle = '#000';

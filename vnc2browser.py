@@ -1,4 +1,11 @@
-#twisted modules
+import sys
+import struct
+import json
+from threading import Thread
+
+import asyncio
+import websockets
+
 from twisted.python import usage, log
 from twisted.internet import reactor, protocol
 #~ from twisted.internet import defer
@@ -6,78 +13,55 @@ from twisted.internet.protocol import Factory, Protocol
 
 from domonic.html import *
 #from domonic.constants.color import Color
+from domonic.constants.keyboard import KeyCode
+from domonic.CDN import *
+from domonic.events import EventDispatcher, KeyboardEvent, MouseEvent
+#from domonic.geom import Rect
 
-import asyncio
-import websockets
-from threading import Thread
 
-#std stuff
-import sys, struct
+class Rect():
+    def __init__(self, x,y,width,height):
+        self.x=x
+        self.y=y
+        self.width=width
+        self.height=height
 
-#local
 import rfb
-#import inputbox
-import json
 
-
-
-'''
-POINTER = tuple([(8,8), (4,4)] + list(pygame.cursors.compile((
-#01234567
-"        ", #0
-"        ", #1
-"        ", #2
-"   .X.  ", #3
-"   X.X  ", #4
-"   .X.  ", #5
-"        ", #6
-"        ", #7
-), 'X', '.')))
-'''
-#keyboard mappings pygame -> vnc
+# js/html -> vnc
 KEYMAPPINGS = {
-    'K_BACKSPACE':        rfb.KEY_BackSpace,
-    'K_TAB':              rfb.KEY_Tab,
-    'K_RETURN':           rfb.KEY_Return,
-    'K_ESCAPE':           rfb.KEY_Escape,
-    'K_KP0':              rfb.KEY_KP_0,
-    'K_KP1':              rfb.KEY_KP_1,
-    'K_KP2':              rfb.KEY_KP_2,
-    'K_KP3':              rfb.KEY_KP_3,
-    'K_KP4':              rfb.KEY_KP_4,
-    'K_KP5':              rfb.KEY_KP_5,
-    'K_KP6':              rfb.KEY_KP_6,
-    'K_KP7':              rfb.KEY_KP_7,
-    'K_KP8':              rfb.KEY_KP_8,
-    'K_KP9':              rfb.KEY_KP_9,
-    'K_KP_ENTER':         rfb.KEY_KP_Enter,
-    'K_UP':               rfb.KEY_Up,
-    'K_DOWN':             rfb.KEY_Down,
-    'K_RIGHT':            rfb.KEY_Right,
-    'K_LEFT':             rfb.KEY_Left,
-    'K_INSERT':           rfb.KEY_Insert,
-    'K_DELETE':           rfb.KEY_Delete,
-    'K_HOME':             rfb.KEY_Home,
-    'K_END':              rfb.KEY_End,
-    'K_PAGEUP':           rfb.KEY_PageUp,
-    'K_PAGEDOWN':         rfb.KEY_PageDown,
-    'K_F1':               rfb.KEY_F1,
-    'K_F2':               rfb.KEY_F2,
-    'K_F3':               rfb.KEY_F3,
-    'K_F4':               rfb.KEY_F4,
-    'K_F5':               rfb.KEY_F5,
-    'K_F6':               rfb.KEY_F6,
-    'K_F7':               rfb.KEY_F7,
-    'K_F8':               rfb.KEY_F8,
-    'K_F9':               rfb.KEY_F9,
-    'K_F10':              rfb.KEY_F10,
-    'K_F11':              rfb.KEY_F11,
-    'K_F12':              rfb.KEY_F12,
-    'K_F13':              rfb.KEY_F13,
-    'K_F14':              rfb.KEY_F14,
-    'K_F15':              rfb.KEY_F15,
+    KeyCode.BACKSPACE:rfb.KEY_BackSpace,
+    KeyCode.TAB:rfb.KEY_Tab,
+    KeyCode.ENTER:rfb.KEY_Return,
+    KeyCode.ESCAPE:rfb.KEY_Escape,
+    KeyCode.RETURN:rfb.KEY_KP_Enter,
+    KeyCode.UP:rfb.KEY_Up,
+    KeyCode.DOWN:rfb.KEY_Down,
+    KeyCode.RIGHT:rfb.KEY_Right,
+    KeyCode.LEFT:rfb.KEY_Left,
+    KeyCode.INSERT:rfb.KEY_Insert,
+    KeyCode.DELETE:rfb.KEY_Delete,
+    KeyCode.HOME:rfb.KEY_Home,
+    KeyCode.END:rfb.KEY_End,
+    KeyCode.PAGE_UP:rfb.KEY_PageUp,
+    KeyCode.PAGE_DOWN:rfb.KEY_PageDown,
+    KeyCode.F1:rfb.KEY_F1,
+    KeyCode.F2:rfb.KEY_F2,
+    KeyCode.F3:rfb.KEY_F3,
+    KeyCode.F4:rfb.KEY_F4,
+    KeyCode.F5:rfb.KEY_F5,
+    KeyCode.F6:rfb.KEY_F6,
+    KeyCode.F7:rfb.KEY_F7,
+    KeyCode.F8:rfb.KEY_F8,
+    KeyCode.F9:rfb.KEY_F9,
+    KeyCode.F10:rfb.KEY_F10,
+    KeyCode.F11:rfb.KEY_F11,
+    KeyCode.F12:rfb.KEY_F12,
+    KeyCode.F13:rfb.KEY_F13,
+    KeyCode.F14:rfb.KEY_F14,
+    KeyCode.F15:rfb.KEY_F15,
 }
-
+'''
 MODIFIERS = {
     'K_NUMLOCK':          rfb.KEY_Num_Lock,
     'K_CAPSLOCK':         rfb.KEY_Caps_Lock,
@@ -101,81 +85,86 @@ MODIFIERS = {
     #~ K_POWER:            rfb.
     #~ K_EURO:             rfb.
 }                        
+'''
+# class Rect():
+#     def __init__(self,x,y,width,height):
+#         self.x = x
+#         self.y = y
+#         self.width = width
+#         self.height = height
+#         pass
 
 
-class TextSprite(div):
-    """a text label"""
-    SIZE = 20
-    def __init__(self, pos, color = (255,0,0, 120), *args, **kwargs):
-        self.pos = pos
-        self.args = args
-        self.kwargs = kwargs
-        #self.containers = containers
-        #pygame.sprite.Sprite.__init__(self, self.containers)
-        # pygame.sprite.Sprite.__init__(self)
-        # self.font = pygame.font.Font(None, self.SIZE)
-        self.lastmsg = None
-        self.update()
-        # self.rect = self.image.get_rect().move(pos)
-
-    def update(self, msg=' '):
-        if msg != self.lastmsg:
-            self.lastscore = msg
-            # self.image = self.font.render(msg, 0, (255,255,255))
-            self.appendChild(msg)
-
-
-
-class Rect():
-    def __init__(self,x,y,width,height):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        pass
-
-
-class PyFace:
-    """PyFace eats all the pies"""
+class VNC2B(EventDispatcher):
+    """VNC2B"""
     
     def __init__(self):
+        super().__init__(self)
         width, height = 640, 480
         self.setRFBSize(width, height)
-        # pygame.display.set_caption('Python VNC Viewer')
-        # pygame.mouse.set_cursor(*POINTER)
-        # pygame.key.set_repeat(500, 30)
-        # self.clock = pygame.time.Clock()
         self.alive = 1
         self.loopcounter = 0
-        # self.sprites = pygame.sprite.RenderUpdates()
-        self.statustext = TextSprite((5, 0))
-        # self.sprites.add(self.statustext)
         self.buttons = 0
         self.protocol = None
-        #self.queue = None
-        
+
+        self.addEventListener( KeyboardEvent.KEYDOWN, self.on_keydown )
+        self.addEventListener( KeyboardEvent.KEYUP, self.on_keyup )
+
+        self.addEventListener( MouseEvent.MOUSEMOVE, self.on_mousemove )
+        self.addEventListener( MouseEvent.MOUSEDOWN, self.on_mousedown )
+        self.addEventListener( MouseEvent.MOUSEUP, self.on_mouseup )
+
+    def on_keydown(self, event):
+        print('a key was pressed', event)
+
+        #if event.key in MODIFIERS:
+        #    self.protocol.keyEvent(MODIFIERS[event.key], down=1)
+        if event.key in KEYMAPPINGS:
+            self.protocol.keyEvent(KEYMAPPINGS[event.key])
+        #elif event.unicode:
+        #    self.protocol.keyEvent(ord(event.unicode))
+        #else:
+        #    print("warning: unknown key")
+            
+
+    def on_keyup(self, event):
+        print('a key was released')
+        #self.protocol.keyEvent(MODIFIERS[e.key], down=0)
+    #~ else:
+        #~ print "unknown key %r" % (e)
+
+    def on_mousemove(self, event):
+        print('mousemove', event)
+        self.buttons  = event.buttons[0] and 1
+        self.buttons |= event.buttons[1] and 2
+        self.buttons |= event.buttons[2] and 4
+        self.protocol.pointerEvent(event.x, event.y, self.buttons)
+        #~ print event.pos
+
+    def on_mousedown(self, event):
+        print('mousedown', event)
+        if event.button == 1: self.buttons |= 1
+        if event.button == 2: self.buttons |= 2
+        if event.button == 3: self.buttons |= 4
+        if event.button == 4: self.buttons |= 8
+        if event.button == 5: self.buttons |= 16
+        self.protocol.pointerEvent(event.x, event.y, self.buttons)
+
+    def on_mouseup(self, event):
+        print('mouseup', event)
+        if event.button == 1: self.buttons &= ~1
+        if event.button == 2: self.buttons &= ~2
+        if event.button == 3: self.buttons &= ~4
+        if event.button == 4: self.buttons &= ~8
+        if event.button == 5: self.buttons &= ~16
+        self.protocol.pointerEvent(event.x, event.y, self.buttons)
+
     def setRFBSize(self, width, height, depth=32):
         """change screen size"""
         self.width, self.height = width, height
         self.area = Rect(0, 0, width, height)
-        winstyle = 0  # |FULLSCREEN
         self.screen = None
-        # if depth == 32:
-            # self.screen = pygame.display.set_mode(self.area.size, winstyle, 32)
-        # elif depth == 8:
-            # self.screen = pygame.display.set_mode(self.area.size, winstyle, 8)
-            #default palette is perfect ;-)
-            #~ pygame.display.set_palette([(x,x,x) for x in range(256)])
-        #~ elif depth is None:
-            #~ bestdepth = pygame.display.mode_ok((width, height), winstyle, 32)
-            #~ print "bestdepth %r" % bestdepth
-            #~ self.screen = pygame.display.set_mode(self.area.size, winstyle, best)
-            #then communicate that to the protocol...
-        # else:
-            #~ self.screen = pygame.display.set_mode(self.area.size, winstyle, depth)
-            # raise ValueError, "color depth not supported"
-        self.background = None #pygame.Surface((self.width, self.height), depth)
-        #self.background.fill(0) #black
+        self.background = None
 
     def setProtocol(self, protocol):
         """attach a protocol instance to post the events to"""
@@ -185,55 +174,6 @@ class PyFace:
         """process events from the queue"""
         seen_events = 1
         return seen_events
-        #return not seen_events
-        '''
-        for e in pygame.event.get():
-            seen_events = 1
-            #~ print e
-            if e.type == QUIT:
-                self.alive = 0
-                reactor.stop()
-            #~ elif e.type == KEYUP and e.key == K_ESCAPE:
-                #~ self.alive = 0
-                #~ reactor.stop()
-            if self.protocol is not None:
-                if e.type == KEYDOWN:
-                    if e.key in MODIFIERS:
-                        self.protocol.keyEvent(MODIFIERS[e.key], down=1)
-                    elif e.key in KEYMAPPINGS:
-                        self.protocol.keyEvent(KEYMAPPINGS[e.key])
-                    elif e.unicode:
-                        self.protocol.keyEvent(ord(e.unicode))
-                    else:
-                        print "warning: unknown key %r" % (e)
-                elif e.type == KEYUP:
-                    if e.key in MODIFIERS:
-                        self.protocol.keyEvent(MODIFIERS[e.key], down=0)
-                    #~ else:
-                        #~ print "unknown key %r" % (e)
-                elif e.type == MOUSEMOTION:
-                    self.buttons  = e.buttons[0] and 1
-                    self.buttons |= e.buttons[1] and 2
-                    self.buttons |= e.buttons[2] and 4
-                    self.protocol.pointerEvent(e.pos[0], e.pos[1], self.buttons)
-                    #~ print e.pos
-                elif e.type == MOUSEBUTTONUP:
-                    if e.button == 1: self.buttons &= ~1
-                    if e.button == 2: self.buttons &= ~2
-                    if e.button == 3: self.buttons &= ~4
-                    if e.button == 4: self.buttons &= ~8
-                    if e.button == 5: self.buttons &= ~16
-                    self.protocol.pointerEvent(e.pos[0], e.pos[1], self.buttons)
-                elif e.type == MOUSEBUTTONDOWN:
-                    if e.button == 1: self.buttons |= 1
-                    if e.button == 2: self.buttons |= 2
-                    if e.button == 3: self.buttons |= 4
-                    if e.button == 4: self.buttons |= 8
-                    if e.button == 5: self.buttons |= 16
-                    self.protocol.pointerEvent(e.pos[0], e.pos[1], self.buttons)
-            return not seen_events
-        return not seen_events
-        '''
 
     def mainloop(self, dum=None):
         # TODO - at moment calls for screen updates. but maybe could be the socket response doing that.
@@ -253,10 +193,7 @@ class RFBToGUI(rfb.RFBClient):
     
     def vncConnectionMade(self):
         """choose appropriate color depth, resize screen"""
-        print('yo!')
-        #~ print "Screen format: depth=%d bytes_per_pixel=%r" % (self.depth, self.bpp)
-        #~ print "Desktop name: %r" % self.name
-
+        #print( "Desktop name: %r" % self.name )
         #~ print "redmax=%r, greenmax=%r, bluemax=%r" % (self.redmax, self.greenmax, self.bluemax)
         #~ print "redshift=%r, greenshift=%r, blueshift=%r" % (self.redshift, self.greenshift, self.blueshift)
 
@@ -275,20 +212,11 @@ class RFBToGUI(rfb.RFBClient):
         if self.factory.password is not None:
             self.sendPassword(self.factory.password)
         else:
-            #XXX hack, this is blocking twisted!!!!!!!
-            screen = pygame.display.set_mode((220,40))
-            screen.fill((255,100,0)) #redish bg
-            self.sendPassword(inputbox.ask(screen, "Password", password=1))
+            print('NO PASSWORD HAS BEEN PROVIDED')
     
-    #~ def beginUpdate(self):
-        #~ """start with a new series of display updates"""
-
     def beginUpdate(self):
         """begin series of display updates"""
-        #~ log.msg("screen lock")
         print('start updates')
-        #global queue
-        #queue = []
         self.frame = []
 
     def commitUpdate(self, rectangles = None):
@@ -447,6 +375,7 @@ class Options(usage.Options):
             #~ reactor.callFromThread(remoteframebuffer.processEvent, e)
     #~ print 'xxxxxxxxxxxxx'
 
+remoteframebuffer = VNC2B()
 queue = []
 
 def main():
@@ -464,13 +393,11 @@ def main():
         logFile = o.opts['outfile']
     log.startLogging(logFile)
     
-    remoteframebuffer = PyFace()
+
 
     host = o.opts['host']
     display = int(o.opts['display'])
     if host is None:
-        # screen = pygame.display.set_mode((220,40))
-        # screen.fill((0,100,255)) #blue bg
         host = 'localhost:1'#inputbox.ask(screen, "Host")
         if host == '':
             raise SystemExit
@@ -492,10 +419,50 @@ def main():
         )
     )
 
-
     # run the socket server
     async def update(websocket, path):
         while True:
+            msg = await websocket.recv()
+            dom_event = json.loads(msg)
+
+            print(msg)
+            t = dom_event['type']
+            evt = None
+
+            if t == "keydown":
+                evt = KeyboardEvent(t)
+                evt.keyCode = dom_event['keyCode']
+                print('keydown', evt)
+        
+            elif t == "keyup":
+                evt = KeyboardEvent(t)
+                evt.keyCode = dom_event['keyCode']
+                print('keyup',evt)
+
+            elif t == 'mousedown':
+                evt = MouseEvent(t)
+                evt.x = dom_event['clientX']
+                evt.y = dom_event['clientY']
+                # evt.buttons = dom_event['buttons']
+                print('mousedown', evt)
+
+            elif t == 'mouseup': 
+                evt = MouseEvent(t)
+                evt.x = dom_event['clientX']
+                evt.y = dom_event['clientY']
+                print('mouseup', evt)
+
+            elif t == "mousemove":
+                evt = MouseEvent(t)
+                evt.x = dom_event['clientX']
+                evt.y = dom_event['clientY']
+                print('mousemove', evt)
+                
+            if evt is not None:
+                # listen for mouse events.
+                global remoteframebuffer
+                remoteframebuffer.dispatchEvent( evt )
+
             global queue
             if len(queue)>0:
                 await websocket.send(json.dumps(queue))
@@ -516,9 +483,15 @@ def main():
     reactor.run()
 
 
+
+
+
+
+
+
+
 # create webpage with a socket connection back to our server so it can get the data
 page = html(
-
 # make a canvas
 style('''
     canvas {
@@ -529,7 +502,11 @@ style('''
     ''',
     _type="text/css"
 ),
-body(canvas(_id="canvas", _width="1000", _height="600")),
+body(
+    
+    input(_placeholder="localhost:1", _id="host"), input(_placeholder="port", _id="port"), input(_placeholder="password", _id="password"),
+    script(_scr=CDN_JS.JQUERY_3_5_1),
+    canvas(_id="canvas", _width="1280", _height="800")),
 
 # listen on the socket and call draw when we get a message
 script('''
@@ -537,6 +514,53 @@ script('''
 const socket = new WebSocket('ws://domain.com:5560'); // your nginx should listen on 5560 and forward to 5555
 
 socket.onmessage = function(event) { data = JSON.parse(event.data); draw(); };  // TOOD - dont send json. just data with seperator
+
+
+function stringify_object(object, depth=0, max_depth=2) {
+    // change max_depth to see more levels, for a touch event, 2 is good
+    if (depth > max_depth)
+        return 'Object';
+
+    const obj = {};
+    for (let key in object) {
+        let value = object[key];
+        if (value instanceof Node)
+            // specify which properties you want to see from the node
+            value = {id: value.id};
+        else if (value instanceof Window)
+            value = 'Window';
+        else if (value instanceof Object)
+            value = stringify_object(value, depth+1, max_depth);
+
+        if(key=="originalEvent"){ // note im stripping this one off
+          continue;
+        }
+
+        obj[key] = value;
+    }
+
+    return depth? obj: JSON.stringify(obj);
+}
+
+$(canvas).ready(function() { 
+    $("canvas").on('mousedown', function(event){ 
+        socket.send( stringify_object(event) );
+    }); 
+    $("canvas").on('mouseup', function(event){ 
+        socket.send( stringify_object(event) );
+    }); 
+    $("canvas").on("keydown", function(event){
+        socket.send( stringify_object(event) );
+    })
+    $("canvas").on("keyup", function(event){
+        socket.send( stringify_object(event) );
+    })
+    $("canvas").on("mousemove", function(event){
+        //socket.send( stringify_object(event) );
+    })
+});
+
+
 '''),
 
 # draw the data
